@@ -4,3 +4,4 @@ numpy
 tushare
 plotly
 yfinance
+akshare
