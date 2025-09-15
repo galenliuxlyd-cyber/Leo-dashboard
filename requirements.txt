@@ -1,7 +1,6 @@
 streamlit
 pandas
 numpy
-tushare
-plotly
 yfinance
 akshare
+plotly
