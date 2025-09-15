@@ -11,7 +11,7 @@ import time
 st.set_page_config(page_title="离火大运监控看板", layout="wide")
 st.title("🔥 离火大运趋势投资系统监控看板")
 
-# 简化持仓配置 - 只保留核心标的
+# 简化持仓配置
 PORTFOLIO = [
     {"category": "美股核心", "symbol": "XLK", "name": "科技ETF", "source": "yfinance"},
     {"category": "美股核心", "symbol": "XLV", "name": "医疗ETF", "source": "yfinance"},
@@ -26,13 +26,9 @@ PORTFOLIO = [
     {"category": "违规模个股", "symbol": "0700.HK", "name": "腾讯控股", "source": "yfinance"},
 ]
 
-# 计算ATR函数 (修复版)
-def calculate_atr(df, period=14):
+# 计算ATR函数
+def calculate_atr(high, low, close, period=14):
     try:
-        high = df['High']
-        low = df['Low']
-        close = df['Close']
-        
         # 计算真实波幅
         tr1 = high - low
         tr2 = abs(high - close.shift())
@@ -40,41 +36,10 @@ def calculate_atr(df, period=14):
         
         tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
         atr = tr.rolling(period).mean()
-        
         return atr
     except Exception as e:
         st.error(f"计算ATR时出错: {e}")
-        return pd.Series(np.nan, index=df.index)
-
-# 计算技术指标函数 (简化版)
-def calculate_technicals(df):
-    if df.empty or len(df) < 65:  # 确保有足够的数据计算61日EMA
-        return df
-    
-    try:
-        # 计算EMA61
-        df['ema61'] = df['Close'].ewm(span=61, adjust=False).mean()
-        
-        # 计算ATR
-        df['atr14'] = calculate_atr(df)
-        
-        # 计算N日高点
-        n_period = 20
-        df['n_high'] = df['High'].rolling(window=n_period).max()
-        
-        # 计算动态止盈价
-        df['dynamic_exit'] = df['n_high'] - 3 * df['atr14']
-        
-        # 计算距离止盈跌幅
-        df['exit_distance_pct'] = (df['Close'] - df['dynamic_exit']) / df['Close']
-        
-        # 判断趋势状态
-        df['trend_status'] = np.where(df['Close'] > df['ema61'], '🟢 多头', '🔴 空头')
-        
-    except Exception as e:
-        st.error(f"计算技术指标时出错: {e}")
-    
-    return df
+        return pd.Series(np.nan, index=close.index)
 
 # 获取数据函数 - 使用yfinance
 def get_data_yfinance(symbol, name):
@@ -87,13 +52,13 @@ def get_data_yfinance(symbol, name):
         
         if data.empty:
             st.warning(f"未获取到 {name}({symbol}) 的数据")
-            return pd.DataFrame()
+            return None
             
         return data
         
     except Exception as e:
         st.error(f"获取 {name}({symbol}) 数据失败: {e}")
-        return pd.DataFrame()
+        return None
 
 # 获取数据函数 - 使用akshare
 def get_data_akshare(symbol, name):
@@ -105,9 +70,9 @@ def get_data_akshare(symbol, name):
         
         if df.empty:
             st.warning(f"未获取到 {name}({symbol}) 的数据")
-            return pd.DataFrame()
+            return None
         
-        # 重命名列以匹配yfinance格式
+        # 重命名列
         df.rename(columns={
             '日期': 'Date',
             '开盘': 'Open',
@@ -124,21 +89,60 @@ def get_data_akshare(symbol, name):
         
     except Exception as e:
         st.error(f"获取 {name}({symbol}) 数据失败: {e}")
-        return pd.DataFrame()
+        return None
+
+# 计算技术指标
+def calculate_technicals_simple(df):
+    if df is None or df.empty or len(df) < 65:
+        return None
+    
+    try:
+        # 创建结果字典
+        result = {}
+        
+        # 基本价格数据
+        result['Close'] = df['Close'].iloc[-1]
+        result['High'] = df['High'].iloc[-1]
+        result['Low'] = df['Low'].iloc[-1]
+        
+        # 计算EMA61
+        result['ema61'] = df['Close'].ewm(span=61, adjust=False).mean().iloc[-1]
+        
+        # 计算ATR
+        atr = calculate_atr(df['High'], df['Low'], df['Close'], 14)
+        result['atr14'] = atr.iloc[-1] if not atr.empty else np.nan
+        
+        # 计算N日高点
+        n_period = 20
+        result['n_high'] = df['High'].rolling(window=n_period).max().iloc[-1]
+        
+        # 计算动态止盈价
+        result['dynamic_exit'] = result['n_high'] - 3 * result['atr14']
+        
+        # 计算距离止盈跌幅
+        result['exit_distance_pct'] = (result['Close'] - result['dynamic_exit']) / result['Close']
+        
+        # 判断趋势状态
+        result['trend_status'] = '🟢 多头' if result['Close'] > result['ema61'] else '🔴 空头'
+        
+        return result
+        
+    except Exception as e:
+        st.error(f"计算技术指标时出错: {e}")
+        return None
 
 # 生成操作建议
-def generate_action(row):
-    if pd.isna(row.get('Close')) or pd.isna(row.get('ema61', np.nan)):
+def generate_action(result, category):
+    if result is None:
         return '⏳ 数据不足'
     
-    if '违规' in row['category']:
+    if '违规' in category:
         return '🚨 违反宪法'
     
-    if row.get('trend_status', '') == '🔴 空头':
+    if result['trend_status'] == '🔴 空头':
         return '🔴 破位清仓'
     
-    exit_pct = row.get('exit_distance_pct', 0)
-    if not pd.isna(exit_pct) and exit_pct < 0:
+    if result['exit_distance_pct'] < 0:
         return '🎯 触发止盈'
     
     return '🟢 持有'
@@ -147,31 +151,43 @@ def generate_action(row):
 def main():
     all_data = []
     
-    for item in PORTFOLIO:
+    # 显示进度条
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    for i, item in enumerate(PORTFOLIO):
+        status_text.text(f"正在处理 {item['name']} ({i+1}/{len(PORTFOLIO)})")
+        progress_bar.progress((i+1)/len(PORTFOLIO))
+        
         try:
-            with st.spinner(f"正在获取 {item['name']} 数据..."):
-                if item['source'] == 'yfinance':
-                    df = get_data_yfinance(item['symbol'], item['name'])
-                else:  # akshare
-                    df = get_data_akshare(item['symbol'], item['name'])
-                
-                if not df.empty and len(df) > 65:
-                    df = calculate_technicals(df)
-                    if not df.empty:
-                        latest = df.iloc[-1].copy()
-                        latest['symbol'] = item['symbol']
-                        latest['name'] = item['name']
-                        latest['category'] = item['category']
-                        all_data.append(latest)
+            # 获取数据
+            if item['source'] == 'yfinance':
+                df = get_data_yfinance(item['symbol'], item['name'])
+            else:
+                df = get_data_akshare(item['symbol'], item['name'])
+            
+            # 计算技术指标
+            if df is not None:
+                result = calculate_technicals_simple(df)
+                if result is not None:
+                    result['symbol'] = item['symbol']
+                    result['name'] = item['name']
+                    result['category'] = item['category']
+                    result['action'] = generate_action(result, item['category'])
+                    all_data.append(result)
+            
         except Exception as e:
             st.error(f"处理 {item['name']} 时出错: {e}")
         
-        # 添加短暂延迟，避免请求过于频繁
+        # 添加短暂延迟
         time.sleep(0.5)
+    
+    # 清除进度条
+    progress_bar.empty()
+    status_text.empty()
     
     if all_data:
         df_dashboard = pd.DataFrame(all_data)
-        df_dashboard['action'] = df_dashboard.apply(generate_action, axis=1)
         
         # 显示监控仪表板
         st.subheader("持仓监控仪表板")
@@ -185,14 +201,16 @@ def main():
         
         # 格式化显示
         display_df = df_dashboard[available_columns].copy()
-        if 'Close' in display_df.columns:
-            display_df['Close'] = display_df['Close'].round(2)
-        if 'ema61' in display_df.columns:
-            display_df['ema61'] = display_df['ema61'].round(2)
-        if 'dynamic_exit' in display_df.columns:
-            display_df['dynamic_exit'] = display_df['dynamic_exit'].round(2)
+        
+        # 格式化数字
+        numeric_cols = ['Close', 'ema61', 'dynamic_exit']
+        for col in numeric_cols:
+            if col in display_df.columns:
+                display_df[col] = display_df[col].apply(lambda x: f"{x:.4f}" if not pd.isna(x) else "N/A")
+        
         if 'exit_distance_pct' in display_df.columns:
-            display_df['exit_distance_pct'] = (display_df['exit_distance_pct'] * 100).round(2)
+            display_df['exit_distance_pct'] = display_df['exit_distance_pct'].apply(
+                lambda x: f"{(x * 100):.2f}%" if not pd.isna(x) else "N/A")
         
         st.dataframe(
             display_df,
@@ -213,9 +231,7 @@ def main():
             else:
                 df_selected = get_data_akshare(selected_item['symbol'], selected_item['name'])
                 
-            if not df_selected.empty:
-                df_selected = calculate_technicals(df_selected)
-                
+            if df_selected is not None and not df_selected.empty:
                 # 创建图表
                 fig = go.Figure()
                 
@@ -229,23 +245,14 @@ def main():
                     name='K线'
                 ))
                 
-                # 添加EMA61线
-                if 'ema61' in df_selected.columns:
-                    fig.add_trace(go.Scatter(
-                        x=df_selected.index,
-                        y=df_selected['ema61'],
-                        name='61日EMA',
-                        line=dict(color='orange', width=2)
-                    ))
-                
-                # 添加移动止盈线
-                if 'dynamic_exit' in df_selected.columns:
-                    fig.add_trace(go.Scatter(
-                        x=df_selected.index,
-                        y=df_selected['dynamic_exit'],
-                        name='移动止盈线',
-                        line=dict(color='red', width=2, dash='dash')
-                    ))
+                # 计算并添加EMA61线
+                ema61 = df_selected['Close'].ewm(span=61, adjust=False).mean()
+                fig.add_trace(go.Scatter(
+                    x=df_selected.index,
+                    y=ema61,
+                    name='61日EMA',
+                    line=dict(color='orange', width=2)
+                ))
                 
                 fig.update_layout(
                     title=f"{selected_item['name']} 技术分析",
@@ -257,26 +264,15 @@ def main():
                 st.plotly_chart(fig, use_container_width=True)
                 
                 # 显示最新数据
-                if not df_selected.empty:
-                    latest = df_selected.iloc[-1]
+                result = calculate_technicals_simple(df_selected)
+                if result is not None:
                     cols = st.columns(4)
-                    
-                    if 'Close' in latest:
-                        cols[0].metric("最新价", f"{latest['Close']:.2f}")
-                    
-                    if 'ema61' in latest and not pd.isna(latest['ema61']):
-                        change_pct = ((latest['Close'] - latest['ema61']) / latest['ema61'] * 100) if 'Close' in latest else 0
-                        cols[1].metric("61日EMA", f"{latest['ema61']:.2f}", 
-                                      f"{change_pct:.2f}%")
-                    
-                    if 'exit_distance_pct' in latest and not pd.isna(latest['exit_distance_pct']):
-                        cols[2].metric("距止盈跌幅", f"{latest['exit_distance_pct'] * 100:.2f}%")
-                    
-                    if 'trend_status' in latest:
-                        cols[3].metric("趋势状态", latest['trend_status'])
+                    cols[0].metric("最新价", f"{result['Close']:.4f}")
+                    cols[1].metric("61日EMA", f"{result['ema61']:.4f}")
+                    cols[2].metric("趋势状态", result['trend_status'])
+                    cols[3].metric("距止盈跌幅", f"{(result['exit_distance_pct'] * 100):.2f}%")
     else:
-        st.warning("未能获取足够数据，请检查网络连接和代码配置")
-        st.info("提示: 某些标的可能需要更长时间获取数据，请刷新页面重试")
+        st.warning("未能获取任何数据，请检查网络连接和代码配置")
 
 if __name__ == "__main__":
     main()
