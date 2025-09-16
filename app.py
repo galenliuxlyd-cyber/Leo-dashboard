@@ -15,12 +15,6 @@ st.title("🔥 离火大运趋势投资系统监控看板")
 PORTFOLIO = [
     {"category": "美股核心", "symbol": "XLK", "name": "科技ETF", "source": "yfinance"},
     {"category": "美股核心", "symbol": "XLV", "name": "医疗ETF", "source": "yfinance"},
-    {"category": "A股赛道", "symbol": "588200", "name": "科创芯片", "source": "akshare"},
-    {"category": "A股医药三角", "symbol": "588860", "name": "科创医药", "source": "akshare"},
-    {"category": "港股医药三角", "symbol": "159892", "name": "恒生医药", "source": "akshare"},
-    {"category": "港股核心", "symbol": "513180", "name": "恒生科技", "source": "akshare"},
-    {"category": "美股核心", "symbol": "513300", "name": "纳指ETF", "source": "akshare"},
-    {"category": "黄金", "symbol": "518880", "name": "黄金ETF", "source": "akshare"},
     {"category": "违规模个股", "symbol": "NVDA", "name": "英伟达", "source": "yfinance"},
     {"category": "违规模个股", "symbol": "TSLA", "name": "特斯拉", "source": "yfinance"},
     {"category": "违规模个股", "symbol": "0700.HK", "name": "腾讯控股", "source": "yfinance"},
@@ -45,37 +39,6 @@ def get_data_yfinance(symbol, name):
         st.error(f"获取 {name}({symbol}) 数据失败: {e}")
         return None
 
-# 获取数据函数 - 使用akshare
-def get_data_akshare(symbol, name):
-    try:
-        # 获取股票历史数据
-        df = ak.stock_zh_a_hist(symbol=symbol, period="daily", 
-                               start_date="20240101", 
-                               end_date=datetime.now().strftime('%Y%m%d'))
-        
-        if df.empty:
-            st.warning(f"未获取到 {name}({symbol}) 的数据")
-            return None
-        
-        # 重命名列
-        df.rename(columns={
-            '日期': 'Date',
-            '开盘': 'Open',
-            '收盘': 'Close',
-            '最高': 'High',
-            '最低': 'Low',
-            '成交量': 'Volume'
-        }, inplace=True)
-        
-        df['Date'] = pd.to_datetime(df['Date'])
-        df.set_index('Date', inplace=True)
-        
-        return df
-        
-    except Exception as e:
-        st.error(f"获取 {name}({symbol}) 数据失败: {e}")
-        return None
-
 # 计算技术指标 (简化版，避免Series比较问题)
 def calculate_technicals_simple(df):
     if df is None or df.empty or len(df) < 65:
@@ -85,39 +48,50 @@ def calculate_technicals_simple(df):
         # 创建结果字典
         result = {}
         
-        # 基本价格数据
+        # 确保我们获取的是标量值而不是Series
         close_price = df['Close'].iloc[-1]
-        result['Close'] = close_price
+        if hasattr(close_price, 'item'):
+            close_price = close_price.item()
+        result['Close'] = float(close_price)
         
         # 计算EMA61
-        ema61 = df['Close'].ewm(span=61, adjust=False).mean().iloc[-1]
-        result['ema61'] = ema61
+        ema61_series = df['Close'].ewm(span=61, adjust=False).mean()
+        ema61 = ema61_series.iloc[-1]
+        if hasattr(ema61, 'item'):
+            ema61 = ema61.item()
+        result['ema61'] = float(ema61)
         
-        # 判断趋势状态 - 使用标量值比较，避免Series比较
-        result['trend_status'] = '🟢 多头' if close_price > ema61 else '🔴 空头'
+        # 判断趋势状态 - 使用标量值比较
+        result['trend_status'] = '🟢 多头' if result['Close'] > result['ema61'] else '🔴 空头'
         
         # 计算ATR (简化版)
-        high_low = df['High'] - df['Low']
-        high_close = np.abs(df['High'] - df['Close'].shift())
-        low_close = np.abs(df['Low'] - df['Close'].shift())
+        high = df['High']
+        low = df['Low']
+        close = df['Close']
         
-        # 使用标量值计算，避免Series比较
-        tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+        # 计算真实波幅
+        tr1 = high - low
+        tr2 = abs(high - close.shift())
+        tr3 = abs(low - close.shift())
+        
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
         atr = tr.rolling(14).mean().iloc[-1]
-        result['atr14'] = atr
+        if hasattr(atr, 'item'):
+            atr = atr.item()
+        result['atr14'] = float(atr)
         
         # 计算N日高点
         n_period = 20
         n_high = df['High'].rolling(window=n_period).max().iloc[-1]
-        result['n_high'] = n_high
+        if hasattr(n_high, 'item'):
+            n_high = n_high.item()
+        result['n_high'] = float(n_high)
         
         # 计算动态止盈价
-        dynamic_exit = n_high - 3 * atr
-        result['dynamic_exit'] = dynamic_exit
+        result['dynamic_exit'] = result['n_high'] - 3 * result['atr14']
         
         # 计算距离止盈跌幅
-        exit_distance_pct = (close_price - dynamic_exit) / close_price
-        result['exit_distance_pct'] = exit_distance_pct
+        result['exit_distance_pct'] = (result['Close'] - result['dynamic_exit']) / result['Close']
         
         return result
         
@@ -158,10 +132,7 @@ def main():
         
         try:
             # 获取数据
-            if item['source'] == 'yfinance':
-                df = get_data_yfinance(item['symbol'], item['name'])
-            else:
-                df = get_data_akshare(item['symbol'], item['name'])
+            df = get_data_yfinance(item['symbol'], item['name'])
             
             # 计算技术指标
             if df is not None and not df.empty:
@@ -225,10 +196,7 @@ def main():
         selected_item = next((item for item in PORTFOLIO if item['symbol'] == symbol), None)
         
         if selected_item:
-            if selected_item['source'] == 'yfinance':
-                df_selected = get_data_yfinance(selected_item['symbol'], selected_item['name'])
-            else:
-                df_selected = get_data_akshare(selected_item['symbol'], selected_item['name'])
+            df_selected = get_data_yfinance(selected_item['symbol'], selected_item['name'])
                 
             if df_selected is not None and not df_selected.empty:
                 # 创建图表
@@ -272,7 +240,6 @@ def main():
                     cols[3].metric("距止盈跌幅", f"{(result['exit_distance_pct'] * 100):.2f}%")
     else:
         st.warning("未能获取任何数据，请检查网络连接和代码配置")
-        st.info("提示: 某些A股ETF可能需要使用不同的代码格式，请尝试使用不带后缀的代码")
 
 if __name__ == "__main__":
     main()
