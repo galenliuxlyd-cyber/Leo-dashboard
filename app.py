@@ -26,21 +26,6 @@ PORTFOLIO = [
     {"category": "违规模个股", "symbol": "0700.HK", "name": "腾讯控股", "source": "yfinance"},
 ]
 
-# 计算ATR函数
-def calculate_atr(high, low, close, period=14):
-    try:
-        # 计算真实波幅
-        tr1 = high - low
-        tr2 = abs(high - close.shift())
-        tr3 = abs(low - close.shift())
-        
-        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-        atr = tr.rolling(period).mean()
-        return atr
-    except Exception as e:
-        st.error(f"计算ATR时出错: {e}")
-        return pd.Series(np.nan, index=close.index)
-
 # 获取数据函数 - 使用yfinance
 def get_data_yfinance(symbol, name):
     try:
@@ -91,7 +76,7 @@ def get_data_akshare(symbol, name):
         st.error(f"获取 {name}({symbol}) 数据失败: {e}")
         return None
 
-# 计算技术指标
+# 计算技术指标 (简化版，避免Series比较问题)
 def calculate_technicals_simple(df):
     if df is None or df.empty or len(df) < 65:
         return None
@@ -101,34 +86,45 @@ def calculate_technicals_simple(df):
         result = {}
         
         # 基本价格数据
-        result['Close'] = df['Close'].iloc[-1]
-        result['High'] = df['High'].iloc[-1]
-        result['Low'] = df['Low'].iloc[-1]
+        close_price = df['Close'].iloc[-1]
+        result['Close'] = close_price
         
         # 计算EMA61
-        result['ema61'] = df['Close'].ewm(span=61, adjust=False).mean().iloc[-1]
+        ema61 = df['Close'].ewm(span=61, adjust=False).mean().iloc[-1]
+        result['ema61'] = ema61
         
-        # 计算ATR
-        atr = calculate_atr(df['High'], df['Low'], df['Close'], 14)
-        result['atr14'] = atr.iloc[-1] if not atr.empty else np.nan
+        # 判断趋势状态 - 使用标量值比较，避免Series比较
+        result['trend_status'] = '🟢 多头' if close_price > ema61 else '🔴 空头'
+        
+        # 计算ATR (简化版)
+        high_low = df['High'] - df['Low']
+        high_close = np.abs(df['High'] - df['Close'].shift())
+        low_close = np.abs(df['Low'] - df['Close'].shift())
+        
+        # 使用标量值计算，避免Series比较
+        tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+        atr = tr.rolling(14).mean().iloc[-1]
+        result['atr14'] = atr
         
         # 计算N日高点
         n_period = 20
-        result['n_high'] = df['High'].rolling(window=n_period).max().iloc[-1]
+        n_high = df['High'].rolling(window=n_period).max().iloc[-1]
+        result['n_high'] = n_high
         
         # 计算动态止盈价
-        result['dynamic_exit'] = result['n_high'] - 3 * result['atr14']
+        dynamic_exit = n_high - 3 * atr
+        result['dynamic_exit'] = dynamic_exit
         
         # 计算距离止盈跌幅
-        result['exit_distance_pct'] = (result['Close'] - result['dynamic_exit']) / result['Close']
-        
-        # 判断趋势状态
-        result['trend_status'] = '🟢 多头' if result['Close'] > result['ema61'] else '🔴 空头'
+        exit_distance_pct = (close_price - dynamic_exit) / close_price
+        result['exit_distance_pct'] = exit_distance_pct
         
         return result
         
     except Exception as e:
         st.error(f"计算技术指标时出错: {e}")
+        import traceback
+        st.error(traceback.format_exc())
         return None
 
 # 生成操作建议
@@ -139,10 +135,11 @@ def generate_action(result, category):
     if '违规' in category:
         return '🚨 违反宪法'
     
-    if result['trend_status'] == '🔴 空头':
+    if result.get('trend_status', '') == '🔴 空头':
         return '🔴 破位清仓'
     
-    if result['exit_distance_pct'] < 0:
+    exit_pct = result.get('exit_distance_pct', 0)
+    if exit_pct < 0:
         return '🎯 触发止盈'
     
     return '🟢 持有'
@@ -167,7 +164,7 @@ def main():
                 df = get_data_akshare(item['symbol'], item['name'])
             
             # 计算技术指标
-            if df is not None:
+            if df is not None and not df.empty:
                 result = calculate_technicals_simple(df)
                 if result is not None:
                     result['symbol'] = item['symbol']
@@ -178,6 +175,8 @@ def main():
             
         except Exception as e:
             st.error(f"处理 {item['name']} 时出错: {e}")
+            import traceback
+            st.error(traceback.format_exc())
         
         # 添加短暂延迟
         time.sleep(0.5)
@@ -273,6 +272,7 @@ def main():
                     cols[3].metric("距止盈跌幅", f"{(result['exit_distance_pct'] * 100):.2f}%")
     else:
         st.warning("未能获取任何数据，请检查网络连接和代码配置")
+        st.info("提示: 某些A股ETF可能需要使用不同的代码格式，请尝试使用不带后缀的代码")
 
 if __name__ == "__main__":
     main()
