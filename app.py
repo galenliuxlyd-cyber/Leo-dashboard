@@ -11,10 +11,16 @@ import time
 st.set_page_config(page_title="离火大运监控看板", layout="wide")
 st.title("🔥 离火大运趋势投资系统监控看板")
 
-# 简化持仓配置
+# 完整持仓配置
 PORTFOLIO = [
     {"category": "美股核心", "symbol": "XLK", "name": "科技ETF", "source": "yfinance"},
     {"category": "美股核心", "symbol": "XLV", "name": "医疗ETF", "source": "yfinance"},
+    {"category": "A股赛道", "symbol": "588200.SH", "name": "科创芯片", "source": "akshare"},
+    {"category": "A股医药三角", "symbol": "588860.SH", "name": "科创医药", "source": "akshare"},
+    {"category": "港股医药三角", "symbol": "159892.SZ", "name": "恒生医药", "source": "akshare"},
+    {"category": "港股核心", "symbol": "513180.SH", "name": "恒生科技", "source": "akshare"},
+    {"category": "美股核心", "symbol": "513300.SH", "name": "纳指ETF", "source": "akshare"},
+    {"category": "黄金", "symbol": "518880.SH", "name": "黄金ETF", "source": "akshare"},
     {"category": "违规模个股", "symbol": "NVDA", "name": "英伟达", "source": "yfinance"},
     {"category": "违规模个股", "symbol": "TSLA", "name": "特斯拉", "source": "yfinance"},
     {"category": "违规模个股", "symbol": "0700.HK", "name": "腾讯控股", "source": "yfinance"},
@@ -39,7 +45,44 @@ def get_data_yfinance(symbol, name):
         st.error(f"获取 {name}({symbol}) 数据失败: {e}")
         return None
 
-# 计算技术指标 (简化版，避免Series比较问题)
+# 获取数据函数 - 使用akshare (带重试机制)
+def get_data_akshare(symbol, name, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            # 获取股票历史数据
+            df = ak.stock_zh_a_hist(symbol=symbol.replace(".SH", "").replace(".SZ", ""), 
+                                   period="daily", 
+                                   start_date="20240101", 
+                                   end_date=datetime.now().strftime('%Y%m%d'))
+            
+            if df.empty:
+                if attempt == max_retries - 1:
+                    st.warning(f"未获取到 {name}({symbol}) 的数据")
+                continue
+            
+            # 重命名列
+            df.rename(columns={
+                '日期': 'Date',
+                '开盘': 'Open',
+                '收盘': 'Close',
+                '最高': 'High',
+                '最低': 'Low',
+                '成交量': 'Volume'
+            }, inplace=True)
+            
+            df['Date'] = pd.to_datetime(df['Date'])
+            df.set_index('Date', inplace=True)
+            
+            return df
+            
+        except Exception as e:
+            if attempt == max_retries - 1:
+                st.error(f"获取 {name}({symbol}) 数据失败: {e}")
+            time.sleep(1)  # 等待1秒后重试
+    
+    return None
+
+# 计算技术指标
 def calculate_technicals_simple(df):
     if df is None or df.empty or len(df) < 65:
         return None
@@ -132,7 +175,10 @@ def main():
         
         try:
             # 获取数据
-            df = get_data_yfinance(item['symbol'], item['name'])
+            if item['source'] == 'yfinance':
+                df = get_data_yfinance(item['symbol'], item['name'])
+            else:
+                df = get_data_akshare(item['symbol'], item['name'])
             
             # 计算技术指标
             if df is not None and not df.empty:
@@ -182,11 +228,8 @@ def main():
             display_df['exit_distance_pct'] = display_df['exit_distance_pct'].apply(
                 lambda x: f"{(x * 100):.2f}%" if not pd.isna(x) else "N/A")
         
-        st.dataframe(
-            display_df,
-            use_container_width=True,
-            height=400
-        )
+        # 使用Streamlit的表格功能，而不是数据框，以获得更好的格式控制
+        st.table(display_df)
         
         # 选择标的显示详细图表
         st.subheader("个股技术分析")
@@ -196,7 +239,10 @@ def main():
         selected_item = next((item for item in PORTFOLIO if item['symbol'] == symbol), None)
         
         if selected_item:
-            df_selected = get_data_yfinance(selected_item['symbol'], selected_item['name'])
+            if selected_item['source'] == 'yfinance':
+                df_selected = get_data_yfinance(selected_item['symbol'], selected_item['name'])
+            else:
+                df_selected = get_data_akshare(selected_item['symbol'], selected_item['name'])
                 
             if df_selected is not None and not df_selected.empty:
                 # 创建图表
@@ -221,11 +267,16 @@ def main():
                     line=dict(color='orange', width=2)
                 ))
                 
+                # 优化Y轴范围
+                y_min = min(df_selected['Low'].min(), ema61.min()) * 0.98
+                y_max = max(df_selected['High'].max(), ema61.max()) * 1.02
+                
                 fig.update_layout(
                     title=f"{selected_item['name']} 技术分析",
                     xaxis_title='日期',
                     yaxis_title='价格',
-                    xaxis_rangeslider_visible=False
+                    xaxis_rangeslider_visible=False,
+                    yaxis=dict(range=[y_min, y_max])
                 )
                 
                 st.plotly_chart(fig, use_container_width=True)
