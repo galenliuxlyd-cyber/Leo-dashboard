@@ -15,12 +15,12 @@ st.title("🔥 离火大运趋势投资系统监控看板")
 PORTFOLIO = [
     {"category": "美股核心", "symbol": "XLK", "name": "科技ETF", "source": "yfinance"},
     {"category": "美股核心", "symbol": "XLV", "name": "医疗ETF", "source": "yfinance"},
-    {"category": "A股赛道", "symbol": "588200.SH", "name": "科创芯片", "source": "akshare"},
-    {"category": "A股医药三角", "symbol": "588860.SH", "name": "科创医药", "source": "akshare"},
-    {"category": "港股医药三角", "symbol": "159892.SZ", "name": "恒生医药", "source": "akshare"},
-    {"category": "港股核心", "symbol": "513180.SH", "name": "恒生科技", "source": "akshare"},
-    {"category": "美股核心", "symbol": "513300.SH", "name": "纳指ETF", "source": "akshare"},
-    {"category": "黄金", "symbol": "518880.SH", "name": "黄金ETF", "source": "akshare"},
+    {"category": "A股赛道", "symbol": "588200", "name": "科创芯片", "source": "akshare"},
+    {"category": "A股医药三角", "symbol": "588860", "name": "科创医药", "source": "akshare"},
+    {"category": "港股医药三角", "symbol": "159892", "name": "恒生医药", "source": "akshare"},
+    {"category": "港股核心", "symbol": "513180", "name": "恒生科技", "source": "akshare"},
+    {"category": "美股核心", "symbol": "513300", "name": "纳指ETF", "source": "akshare"},
+    {"category": "黄金", "symbol": "518880", "name": "黄金ETF", "source": "akshare"},
     {"category": "违规模个股", "symbol": "NVDA", "name": "英伟达", "source": "yfinance"},
     {"category": "违规模个股", "symbol": "TSLA", "name": "特斯拉", "source": "yfinance"},
     {"category": "违规模个股", "symbol": "0700.HK", "name": "腾讯控股", "source": "yfinance"},
@@ -49,26 +49,48 @@ def get_data_yfinance(symbol, name):
 def get_data_akshare(symbol, name, max_retries=3):
     for attempt in range(max_retries):
         try:
-            # 获取股票历史数据
-            df = ak.stock_zh_a_hist(symbol=symbol.replace(".SH", "").replace(".SZ", ""), 
-                                   period="daily", 
-                                   start_date="20240101", 
-                                   end_date=datetime.now().strftime('%Y%m%d'))
+            # 尝试多种方式获取数据
+            df = None
             
-            if df.empty:
+            # 方法1: 使用基金ETF接口
+            try:
+                df = ak.fund_etf_hist_em(symbol=symbol, period="daily", 
+                                        start_date="20240101", 
+                                        end_date=datetime.now().strftime('%Y%m%d'))
+                if not df.empty:
+                    df.rename(columns={
+                        '日期': 'Date',
+                        '开盘': 'Open',
+                        '收盘': 'Close',
+                        '最高': 'High',
+                        '最低': 'Low',
+                        '成交量': 'Volume'
+                    }, inplace=True)
+            except:
+                pass
+            
+            # 方法2: 使用股票接口
+            if df is None or df.empty:
+                try:
+                    df = ak.stock_zh_a_hist(symbol=symbol, period="daily", 
+                                           start_date="20240101", 
+                                           end_date=datetime.now().strftime('%Y%m%d'))
+                    if not df.empty:
+                        df.rename(columns={
+                            '日期': 'Date',
+                            '开盘': 'Open',
+                            '收盘': 'Close',
+                            '最高': 'High',
+                            '最低': 'Low',
+                            '成交量': 'Volume'
+                        }, inplace=True)
+                except:
+                    pass
+            
+            if df is None or df.empty:
                 if attempt == max_retries - 1:
                     st.warning(f"未获取到 {name}({symbol}) 的数据")
                 continue
-            
-            # 重命名列
-            df.rename(columns={
-                '日期': 'Date',
-                '开盘': 'Open',
-                '收盘': 'Close',
-                '最高': 'High',
-                '最低': 'Low',
-                '成交量': 'Volume'
-            }, inplace=True)
             
             df['Date'] = pd.to_datetime(df['Date'])
             df.set_index('Date', inplace=True)
@@ -267,9 +289,19 @@ def main():
                     line=dict(color='orange', width=2)
                 ))
                 
-                # 优化Y轴范围
-                y_min = min(df_selected['Low'].min(), ema61.min()) * 0.98
-                y_max = max(df_selected['High'].max(), ema61.max()) * 1.02
+                # 优化Y轴范围 - 修复错误
+                try:
+                    low_min = float(df_selected['Low'].min())
+                    high_max = float(df_selected['High'].max())
+                    ema61_min = float(ema61.min())
+                    ema61_max = float(ema61.max())
+                    
+                    y_min = min(low_min, ema61_min) * 0.98
+                    y_max = max(high_max, ema61_max) * 1.02
+                except:
+                    # 如果计算Y轴范围出错，使用默认范围
+                    y_min = float(df_selected['Low'].min()) * 0.98
+                    y_max = float(df_selected['High'].max()) * 1.02
                 
                 fig.update_layout(
                     title=f"{selected_item['name']} 技术分析",
