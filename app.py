@@ -13,17 +13,26 @@ st.title("🔥 离火大运趋势投资系统监控看板")
 
 # 完整持仓配置
 PORTFOLIO = [
-    {"category": "美股核心", "symbol": "XLK", "name": "科技ETF", "source": "yfinance"},
-    {"category": "美股核心", "symbol": "XLV", "name": "医疗ETF", "source": "yfinance"},
-    {"category": "A股赛道", "symbol": "588200", "name": "科创芯片", "source": "akshare"},
-    {"category": "A股医药三角", "symbol": "588860", "name": "科创医药", "source": "akshare"},
-    {"category": "港股医药三角", "symbol": "159892", "name": "恒生医药", "source": "akshare"},
-    {"category": "港股核心", "symbol": "513180", "name": "恒生科技", "source": "akshare"},
-    {"category": "美股核心", "symbol": "513300", "name": "纳指ETF", "source": "akshare"},
-    {"category": "黄金", "symbol": "518880", "name": "黄金ETF", "source": "akshare"},
-    {"category": "违规模个股", "symbol": "NVDA", "name": "英伟达", "source": "yfinance"},
-    {"category": "违规模个股", "symbol": "TSLA", "name": "特斯拉", "source": "yfinance"},
-    {"category": "违规模个股", "symbol": "0700.HK", "name": "腾讯控股", "source": "yfinance"},
+    {"category": "观察", "symbol": "YXIC", "name": "纳斯达克指数", "ts_code": "YXIC.US", "exchange": "US"},
+    {"category": "观察", "symbol": "HSTECH", "name": "恒生科技指数", "ts_code": "HSTECH.HK", "exchange": "HK"},
+    {"category": "观察", "symbol": "000001", "name": "上证指数", "ts_code": "000001.SH", "exchange": "SH"},
+    {"category": "美股核心", "symbol": "XLK", "name": "科技ETF", "ts_code": "XLK.US", "exchange": "US"},
+    {"category": "美股核心", "symbol": "XLV", "name": "医疗ETF", "ts_code": "XLV.US", "exchange": "US"},
+    {"category": "A股赛道", "symbol": "516630", "name": "云计算50", "ts_code": "516630.SH", "exchange": "SH"},
+    {"category": "A股赛道", "symbol": "588200", "name": "科创芯片", "ts_code": "588200.SH", "exchange": "SH"},
+    {"category": "A股医药三角", "symbol": "588860", "name": "科创医药", "ts_code": "588860.SH", "exchange": "SH"},
+    {"category": "港股医药三角", "symbol": "159892", "name": "恒生医药", "ts_code": "159892.SZ", "exchange": "SZ"},
+    {"category": "港股医药三角", "symbol": "159316", "name": "恒生创新药", "ts_code": "159316.SZ", "exchange": "SZ"},
+    {"category": "港股核心", "symbol": "513180", "name": "恒生科技", "ts_code": "513180.SH", "exchange": "SH"},
+    {"category": "美股核心", "symbol": "513300", "name": "纳指", "ts_code": "513300.SH", "exchange": "SH"},
+    {"category": "黄金", "symbol": "518880", "name": "黄金", "ts_code": "518880.SH", "exchange": "SH"},
+    {"category": "违规模个股", "symbol": "NVDA", "name": "英伟达", "ts_code": "NVDA.US", "exchange": "US"},
+    {"category": "违规模个股", "symbol": "TSLA", "name": "特斯拉", "ts_code": "TSLA.US", "exchange": "US"},
+    {"category": "违规模个股", "symbol": "00700", "name": "腾讯控股", "ts_code": "00700.HK", "exchange": "HK"},
+    {"category": "违规ST股", "symbol": "002425", "name": "ST凯文", "ts_code": "002425.SZ", "exchange": "SZ"},
+    {"category": "违规模个股", "symbol": "000559", "name": "万向钱潮", "ts_code": "000559.SZ", "exchange": "SZ"},
+    {"category": "违规模个股", "symbol": "600654", "name": "中安科", "ts_code": "600654.SH", "exchange": "SH"},
+    {"category": "违规模个股", "symbol": "002004", "name": "华邦健康", "ts_code": "002004.SZ", "exchange": "SZ"},
 ]
 
 # 获取数据函数 - 使用yfinance
@@ -45,7 +54,7 @@ def get_data_yfinance(symbol, name):
         st.error(f"获取 {name}({symbol}) 数据失败: {e}")
         return None
 
-# 获取数据函数 - 使用akshare (带重试机制)
+# 获取数据函数 - 使用akshare
 def get_data_akshare(symbol, name, max_retries=3):
     for attempt in range(max_retries):
         try:
@@ -267,60 +276,65 @@ def main():
                 df_selected = get_data_akshare(selected_item['symbol'], selected_item['name'])
                 
             if df_selected is not None and not df_selected.empty:
-                # 创建图表
-                fig = go.Figure()
-                
-                # 添加K线
-                fig.add_trace(go.Candlestick(
-                    x=df_selected.index,
-                    open=df_selected['Open'],
-                    high=df_selected['High'],
-                    low=df_selected['Low'],
-                    close=df_selected['Close'],
-                    name='K线'
-                ))
-                
-                # 计算并添加EMA61线
-                ema61 = df_selected['Close'].ewm(span=61, adjust=False).mean()
-                fig.add_trace(go.Scatter(
-                    x=df_selected.index,
-                    y=ema61,
-                    name='61日EMA',
-                    line=dict(color='orange', width=2)
-                ))
-                
-                # 优化Y轴范围 - 修复错误
                 try:
-                    low_min = float(df_selected['Low'].min())
-                    high_max = float(df_selected['High'].max())
-                    ema61_min = float(ema61.min())
-                    ema61_max = float(ema61.max())
+                    # 创建图表
+                    fig = go.Figure()
                     
-                    y_min = min(low_min, ema61_min) * 0.98
-                    y_max = max(high_max, ema61_max) * 1.02
-                except:
-                    # 如果计算Y轴范围出错，使用默认范围
-                    y_min = float(df_selected['Low'].min()) * 0.98
-                    y_max = float(df_selected['High'].max()) * 1.02
-                
-                fig.update_layout(
-                    title=f"{selected_item['name']} 技术分析",
-                    xaxis_title='日期',
-                    yaxis_title='价格',
-                    xaxis_rangeslider_visible=False,
-                    yaxis=dict(range=[y_min, y_max])
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # 显示最新数据
-                result = calculate_technicals_simple(df_selected)
-                if result is not None:
-                    cols = st.columns(4)
-                    cols[0].metric("最新价", f"{result['Close']:.4f}")
-                    cols[1].metric("61日EMA", f"{result['ema61']:.4f}")
-                    cols[2].metric("趋势状态", result['trend_status'])
-                    cols[3].metric("距止盈跌幅", f"{(result['exit_distance_pct'] * 100):.2f}%")
+                    # 添加K线
+                    fig.add_trace(go.Candlestick(
+                        x=df_selected.index,
+                        open=df_selected['Open'],
+                        high=df_selected['High'],
+                        low=df_selected['Low'],
+                        close=df_selected['Close'],
+                        name='K线'
+                    ))
+                    
+                    # 计算并添加EMA61线
+                    ema61 = df_selected['Close'].ewm(span=61, adjust=False).mean()
+                    fig.add_trace(go.Scatter(
+                        x=df_selected.index,
+                        y=ema61,
+                        name='61日EMA',
+                        line=dict(color='orange', width=2)
+                    ))
+                    
+                    # 优化Y轴范围 - 修复错误
+                    try:
+                        low_min = float(df_selected['Low'].min())
+                        high_max = float(df_selected['High'].max())
+                        ema61_min = float(ema61.min())
+                        ema61_max = float(ema61.max())
+                        
+                        y_min = min(low_min, ema61_min) * 0.98
+                        y_max = max(high_max, ema61_max) * 1.02
+                    except:
+                        # 如果计算Y轴范围出错，使用默认范围
+                        y_min = float(df_selected['Low'].min()) * 0.98
+                        y_max = float(df_selected['High'].max()) * 1.02
+                    
+                    fig.update_layout(
+                        title=f"{selected_item['name']} 技术分析",
+                        xaxis_title='日期',
+                        yaxis_title='价格',
+                        xaxis_rangeslider_visible=False,
+                        yaxis=dict(range=[y_min, y_max])
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # 显示最新数据
+                    result = calculate_technicals_simple(df_selected)
+                    if result is not None:
+                        cols = st.columns(4)
+                        cols[0].metric("最新价", f"{result['Close']:.4f}")
+                        cols[1].metric("61日EMA", f"{result['ema61']:.4f}")
+                        cols[2].metric("趋势状态", result['trend_status'])
+                        cols[3].metric("距止盈跌幅", f"{(result['exit_distance_pct'] * 100):.2f}%")
+                except Exception as e:
+                    st.error(f"绘制图表时出错: {e}")
+                    import traceback
+                    st.error(traceback.format_exc())
     else:
         st.warning("未能获取任何数据，请检查网络连接和代码配置")
 
