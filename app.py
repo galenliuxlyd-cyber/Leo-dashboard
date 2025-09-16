@@ -13,26 +13,17 @@ st.title("🔥 离火大运趋势投资系统监控看板")
 
 # 完整持仓配置
 PORTFOLIO = [
-    {"category": "观察", "symbol": "YXIC", "name": "纳斯达克指数", "ts_code": "YXIC.US", "exchange": "US"},
-    {"category": "观察", "symbol": "HSTECH", "name": "恒生科技指数", "ts_code": "HSTECH.HK", "exchange": "HK"},
-    {"category": "观察", "symbol": "000001", "name": "上证指数", "ts_code": "000001.SH", "exchange": "SH"},
-    {"category": "美股核心", "symbol": "XLK", "name": "科技ETF", "ts_code": "XLK.US", "exchange": "US"},
-    {"category": "美股核心", "symbol": "XLV", "name": "医疗ETF", "ts_code": "XLV.US", "exchange": "US"},
-    {"category": "A股赛道", "symbol": "516630", "name": "云计算50", "ts_code": "516630.SH", "exchange": "SH"},
-    {"category": "A股赛道", "symbol": "588200", "name": "科创芯片", "ts_code": "588200.SH", "exchange": "SH"},
-    {"category": "A股医药三角", "symbol": "588860", "name": "科创医药", "ts_code": "588860.SH", "exchange": "SH"},
-    {"category": "港股医药三角", "symbol": "159892", "name": "恒生医药", "ts_code": "159892.SZ", "exchange": "SZ"},
-    {"category": "港股医药三角", "symbol": "159316", "name": "恒生创新药", "ts_code": "159316.SZ", "exchange": "SZ"},
-    {"category": "港股核心", "symbol": "513180", "name": "恒生科技", "ts_code": "513180.SH", "exchange": "SH"},
-    {"category": "美股核心", "symbol": "513300", "name": "纳指", "ts_code": "513300.SH", "exchange": "SH"},
-    {"category": "黄金", "symbol": "518880", "name": "黄金", "ts_code": "518880.SH", "exchange": "SH"},
-    {"category": "违规模个股", "symbol": "NVDA", "name": "英伟达", "ts_code": "NVDA.US", "exchange": "US"},
-    {"category": "违规模个股", "symbol": "TSLA", "name": "特斯拉", "ts_code": "TSLA.US", "exchange": "US"},
-    {"category": "违规模个股", "symbol": "00700", "name": "腾讯控股", "ts_code": "00700.HK", "exchange": "HK"},
-    {"category": "违规ST股", "symbol": "002425", "name": "ST凯文", "ts_code": "002425.SZ", "exchange": "SZ"},
-    {"category": "违规模个股", "symbol": "000559", "name": "万向钱潮", "ts_code": "000559.SZ", "exchange": "SZ"},
-    {"category": "违规模个股", "symbol": "600654", "name": "中安科", "ts_code": "600654.SH", "exchange": "SH"},
-    {"category": "违规模个股", "symbol": "002004", "name": "华邦健康", "ts_code": "002004.SZ", "exchange": "SZ"},
+    {"category": "美股核心", "symbol": "XLK", "name": "科技ETF", "source": "yfinance"},
+    {"category": "美股核心", "symbol": "XLV", "name": "医疗ETF", "source": "yfinance"},
+    {"category": "A股赛道", "symbol": "588200", "name": "科创芯片", "source": "akshare"},
+    {"category": "A股医药三角", "symbol": "588860", "name": "科创医药", "source": "akshare"},
+    {"category": "港股医药三角", "symbol": "159892", "name": "恒生医药", "source": "akshare"},
+    {"category": "港股核心", "symbol": "513180", "name": "恒生科技", "source": "akshare"},
+    {"category": "美股核心", "symbol": "513300", "name": "纳指ETF", "source": "akshare"},
+    {"category": "黄金", "symbol": "518880", "name": "黄金ETF", "source": "akshare"},
+    {"category": "违规模个股", "symbol": "NVDA", "name": "英伟达", "source": "yfinance"},
+    {"category": "违规模个股", "symbol": "TSLA", "name": "特斯拉", "source": "yfinance"},
+    {"category": "违规模个股", "symbol": "0700.HK", "name": "腾讯控股", "source": "yfinance"},
 ]
 
 # 获取数据函数 - 使用yfinance
