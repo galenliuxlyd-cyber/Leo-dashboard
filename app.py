@@ -12,16 +12,26 @@ st.title("🔥 离火大运趋势投资系统监控看板")
 
 # 简化持仓配置 - 只使用 yfinance 可以获取的标的
 PORTFOLIO = [
-    {"category": "美股核心", "symbol": "XLK", "name": "科技ETF", "exchange": "US"},
-    {"category": "美股核心", "symbol": "XLV", "name": "医疗ETF", "exchange": "US"},
-    {"category": "美股核心", "symbol": "QQQ", "name": "纳指ETF", "exchange": "US"},
-    {"category": "黄金", "symbol": "GLD", "name": "黄金ETF", "exchange": "US"},
-    {"category": "违规模个股", "symbol": "NVDA", "name": "英伟达", "exchange": "US"},
-    {"category": "违规模个股", "symbol": "TSLA", "name": "特斯拉", "exchange": "US"},
-    {"category": "违规模个股", "symbol": "0700.HK", "name": "腾讯控股", "exchange": "HK"},
-    {"category": "港股核心", "symbol": "EWH", "name": "香港ETF", "exchange": "US"},
-    {"category": "中国科技", "symbol": "KWEB", "name": "中国互联网ETF", "exchange": "US"},
-    {"category": "新兴市场", "symbol": "EEM", "name": "新兴市场ETF", "exchange": "US"},
+ {"category": "观察", "symbol": "^IXIC", "name": "纳斯达克指数", "source": "yfinance"},
+    {"category": "观察", "symbol": "^HSTECH", "name": "恒生科技指数", "source": "yfinance"},
+    {"category": "观察", "symbol": "000001", "name": "上证指数", "source": "akshare", "ak_code": "000001"},
+    {"category": "美股核心", "symbol": "XLK", "name": "科技ETF", "source": "yfinance"},
+    {"category": "美股核心", "symbol": "XLV", "name": "医疗ETF", "source": "yfinance"},
+    {"category": "A股赛道", "symbol": "516630", "name": "云计算50", "source": "akshare", "ak_code": "516630"},
+    {"category": "A股赛道", "symbol": "588200", "name": "科创芯片", "source": "akshare", "ak_code": "588200"},
+    {"category": "A股医药三角", "symbol": "588860", "name": "科创医药", "source": "akshare", "ak_code": "588860"},
+    {"category": "港股医药三角", "symbol": "159892", "name": "恒生医药", "source": "akshare", "ak_code": "159892"},
+    {"category": "港股医药三角", "symbol": "159316", "name": "恒生创新药", "source": "akshare", "ak_code": "159316"},
+    {"category": "港股核心", "symbol": "513180", "name": "恒生科技", "source": "akshare", "ak_code": "513180"},
+    {"category": "美股核心", "symbol": "513300", "name": "纳指ETF", "source": "akshare", "ak_code": "513300"},
+    {"category": "黄金", "symbol": "518880", "name": "黄金ETF", "source": "akshare", "ak_code": "518880"},
+    {"category": "违规模个股", "symbol": "NVDA", "name": "英伟达", "source": "yfinance"},
+    {"category": "违规模个股", "symbol": "TSLA", "name": "特斯拉", "source": "yfinance"},
+    {"category": "违规模个股", "symbol": "0700.HK", "name": "腾讯控股", "source": "yfinance"},
+    {"category": "违规ST股", "symbol": "002425", "name": "ST凯文", "source": "akshare", "ak_code": "002425"},
+    {"category": "违规模个股", "symbol": "000559", "name": "万向钱潮", "source": "akshare", "ak_code": "000559"},
+    {"category": "违规模个股", "symbol": "600654", "name": "中安科", "source": "akshare", "ak_code": "600654"},
+    {"category": "违规模个股", "symbol": "002004", "name": "华邦健康", "source": "akshare", "ak_code": "002004"},
 ]
 
 # 获取数据函数 - 使用 yfinance
