@@ -14,7 +14,7 @@ st.title("🔥 离火大运趋势投资系统监控看板")
 # 完整持仓配置
 PORTFOLIO = [
     {"category": "观察", "symbol": "^IXIC", "name": "纳斯达克指数", "source": "yfinance"},
-    {"category": "观察", "symbol": "HSTECH", "name": "恒生科技指数", "source": "yfinance"},
+    {"category": "观察", "symbol": "恒生科技指数", "name": "恒生科技指数", "source": "akshare"},
     {"category": "观察", "symbol": "000001", "name": "上证指数", "source": "akshare"},
     {"category": "美股核心", "symbol": "XLK", "name": "科技ETF", "source": "yfinance"},
     {"category": "美股核心", "symbol": "XLV", "name": "医疗ETF", "source": "yfinance"},
