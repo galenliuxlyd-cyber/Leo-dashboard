@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
-import akshare as ak
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import time
@@ -11,22 +10,21 @@ import time
 st.set_page_config(page_title="离火大运监控看板", layout="wide")
 st.title("🔥 离火大运趋势投资系统监控看板")
 
-# 完整持仓配置
+# 简化持仓配置 - 只使用 yfinance 可以获取的标的
 PORTFOLIO = [
-    {"category": "美股核心", "symbol": "XLK", "name": "科技ETF", "source": "yfinance"},
-    {"category": "美股核心", "symbol": "XLV", "name": "医疗ETF", "source": "yfinance"},
-    {"category": "A股赛道", "symbol": "588200", "name": "科创芯片", "source": "akshare"},
-    {"category": "A股医药三角", "symbol": "588860", "name": "科创医药", "source": "akshare"},
-    {"category": "港股医药三角", "symbol": "159892", "name": "恒生医药", "source": "akshare"},
-    {"category": "港股核心", "symbol": "513180", "name": "恒生科技", "source": "akshare"},
-    {"category": "美股核心", "symbol": "513300", "name": "纳指ETF", "source": "akshare"},
-    {"category": "黄金", "symbol": "518880", "name": "黄金ETF", "source": "akshare"},
-    {"category": "违规模个股", "symbol": "NVDA", "name": "英伟达", "source": "yfinance"},
-    {"category": "违规模个股", "symbol": "TSLA", "name": "特斯拉", "source": "yfinance"},
-    {"category": "违规模个股", "symbol": "0700.HK", "name": "腾讯控股", "source": "yfinance"},
+    {"category": "美股核心", "symbol": "XLK", "name": "科技ETF", "exchange": "US"},
+    {"category": "美股核心", "symbol": "XLV", "name": "医疗ETF", "exchange": "US"},
+    {"category": "美股核心", "symbol": "QQQ", "name": "纳指ETF", "exchange": "US"},
+    {"category": "黄金", "symbol": "GLD", "name": "黄金ETF", "exchange": "US"},
+    {"category": "违规模个股", "symbol": "NVDA", "name": "英伟达", "exchange": "US"},
+    {"category": "违规模个股", "symbol": "TSLA", "name": "特斯拉", "exchange": "US"},
+    {"category": "违规模个股", "symbol": "0700.HK", "name": "腾讯控股", "exchange": "HK"},
+    {"category": "港股核心", "symbol": "EWH", "name": "香港ETF", "exchange": "US"},
+    {"category": "中国科技", "symbol": "KWEB", "name": "中国互联网ETF", "exchange": "US"},
+    {"category": "新兴市场", "symbol": "EEM", "name": "新兴市场ETF", "exchange": "US"},
 ]
 
-# 获取数据函数 - 使用yfinance
+# 获取数据函数 - 使用 yfinance
 def get_data_yfinance(symbol, name):
     try:
         end_date = datetime.now()
@@ -44,65 +42,6 @@ def get_data_yfinance(symbol, name):
     except Exception as e:
         st.error(f"获取 {name}({symbol}) 数据失败: {e}")
         return None
-
-# 获取数据函数 - 使用akshare
-def get_data_akshare(symbol, name, max_retries=3):
-    for attempt in range(max_retries):
-        try:
-            # 尝试多种方式获取数据
-            df = None
-            
-            # 方法1: 使用基金ETF接口
-            try:
-                df = ak.fund_etf_hist_em(symbol=symbol, period="daily", 
-                                        start_date="20240101", 
-                                        end_date=datetime.now().strftime('%Y%m%d'))
-                if not df.empty:
-                    df.rename(columns={
-                        '日期': 'Date',
-                        '开盘': 'Open',
-                        '收盘': 'Close',
-                        '最高': 'High',
-                        '最低': 'Low',
-                        '成交量': 'Volume'
-                    }, inplace=True)
-            except:
-                pass
-            
-            # 方法2: 使用股票接口
-            if df is None or df.empty:
-                try:
-                    df = ak.stock_zh_a_hist(symbol=symbol, period="daily", 
-                                           start_date="20240101", 
-                                           end_date=datetime.now().strftime('%Y%m%d'))
-                    if not df.empty:
-                        df.rename(columns={
-                            '日期': 'Date',
-                            '开盘': 'Open',
-                            '收盘': 'Close',
-                            '最高': 'High',
-                            '最低': 'Low',
-                            '成交量': 'Volume'
-                        }, inplace=True)
-                except:
-                    pass
-            
-            if df is None or df.empty:
-                if attempt == max_retries - 1:
-                    st.warning(f"未获取到 {name}({symbol}) 的数据")
-                continue
-            
-            df['Date'] = pd.to_datetime(df['Date'])
-            df.set_index('Date', inplace=True)
-            
-            return df
-            
-        except Exception as e:
-            if attempt == max_retries - 1:
-                st.error(f"获取 {name}({symbol}) 数据失败: {e}")
-            time.sleep(1)  # 等待1秒后重试
-    
-    return None
 
 # 计算技术指标
 def calculate_technicals_simple(df):
@@ -197,10 +136,7 @@ def main():
         
         try:
             # 获取数据
-            if item['source'] == 'yfinance':
-                df = get_data_yfinance(item['symbol'], item['name'])
-            else:
-                df = get_data_akshare(item['symbol'], item['name'])
+            df = get_data_yfinance(item['symbol'], item['name'])
             
             # 计算技术指标
             if df is not None and not df.empty:
@@ -261,10 +197,7 @@ def main():
         selected_item = next((item for item in PORTFOLIO if item['symbol'] == symbol), None)
         
         if selected_item:
-            if selected_item['source'] == 'yfinance':
-                df_selected = get_data_yfinance(selected_item['symbol'], selected_item['name'])
-            else:
-                df_selected = get_data_akshare(selected_item['symbol'], selected_item['name'])
+            df_selected = get_data_yfinance(selected_item['symbol'], selected_item['name'])
                 
             if df_selected is not None and not df_selected.empty:
                 try:
@@ -290,7 +223,7 @@ def main():
                         line=dict(color='orange', width=2)
                     ))
                     
-                    # 优化Y轴范围 - 修复错误
+                    # 优化Y轴范围
                     try:
                         low_min = float(df_selected['Low'].min())
                         high_max = float(df_selected['High'].max())
