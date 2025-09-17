@@ -11,7 +11,7 @@ import time
 st.set_page_config(page_title="离火大运监控看板", layout="wide")
 st.title("🔥 离火大运趋势投资系统监控看板")
 
-# 完整持仓配置
+# 完整持仓配置 - 修正指数代码
 PORTFOLIO = [
     {"category": "观察", "symbol": "^IXIC", "name": "纳斯达克指数", "source": "yfinance"},
     {"category": "观察", "symbol": "000001", "name": "上证指数", "source": "akshare"},
@@ -83,6 +83,24 @@ def get_data_akshare(symbol, name, max_retries=3):
                     df = ak.stock_zh_a_hist(symbol=symbol, period="daily", 
                                            start_date="20240101", 
                                            end_date=datetime.now().strftime('%Y%m%d'))
+                    if not df.empty:
+                        df.rename(columns={
+                            '日期': 'Date',
+                            '开盘': 'Open',
+                            '收盘': 'Close',
+                            '最高': 'High',
+                            '最低': 'Low',
+                            '成交量': 'Volume'
+                        }, inplace=True)
+                except:
+                    pass
+            
+            # 方法3: 使用指数接口
+            if df is None or df.empty:
+                try:
+                    df = ak.stock_zh_index_hist(symbol=symbol, period="daily", 
+                                               start_date="20240101", 
+                                               end_date=datetime.now().strftime('%Y%m%d'))
                     if not df.empty:
                         df.rename(columns={
                             '日期': 'Date',
@@ -275,60 +293,65 @@ def main():
                 df_selected = get_data_akshare(selected_item['symbol'], selected_item['name'])
                 
             if df_selected is not None and not df_selected.empty:
-                # 创建图表
-                fig = go.Figure()
-                
-                # 添加K线
-                fig.add_trace(go.Candlestick(
-                    x=df_selected.index,
-                    open=df_selected['Open'],
-                    high=df_selected['High'],
-                    low=df_selected['Low'],
-                    close=df_selected['Close'],
-                    name='K线'
-                ))
-                
-                # 计算并添加EMA61线
-                ema61 = df_selected['Close'].ewm(span=61, adjust=False).mean()
-                fig.add_trace(go.Scatter(
-                    x=df_selected.index,
-                    y=ema61,
-                    name='61日EMA',
-                    line=dict(color='orange', width=2)
-                ))
-                
-                # 优化Y轴范围 - 修复错误
                 try:
-                    low_min = float(df_selected['Low'].min())
-                    high_max = float(df_selected['High'].max())
-                    ema61_min = float(ema61.min())
-                    ema61_max = float(ema61.max())
+                    # 创建图表
+                    fig = go.Figure()
                     
-                    y_min = min(low_min, ema61_min) * 0.98
-                    y_max = max(high_max, ema61_max) * 1.02
-                except:
-                    # 如果计算Y轴范围出错，使用默认范围
-                    y_min = float(df_selected['Low'].min()) * 0.98
-                    y_max = float(df_selected['High'].max()) * 1.02
-                
-                fig.update_layout(
-                    title=f"{selected_item['name']} 技术分析",
-                    xaxis_title='日期',
-                    yaxis_title='价格',
-                    xaxis_rangeslider_visible=False,
-                    yaxis=dict(range=[y_min, y_max])
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # 显示最新数据
-                result = calculate_technicals_simple(df_selected)
-                if result is not None:
-                    cols = st.columns(4)
-                    cols[0].metric("最新价", f"{result['Close']:.4f}")
-                    cols[1].metric("61日EMA", f"{result['ema61']:.4f}")
-                    cols[2].metric("趋势状态", result['trend_status'])
-                    cols[3].metric("距止盈跌幅", f"{(result['exit_distance_pct'] * 100):.2f}%")
+                    # 添加K线
+                    fig.add_trace(go.Candlestick(
+                        x=df_selected.index,
+                        open=df_selected['Open'],
+                        high=df_selected['High'],
+                        low=df_selected['Low'],
+                        close=df_selected['Close'],
+                        name='K线'
+                    ))
+                    
+                    # 计算并添加EMA61线
+                    ema61 = df_selected['Close'].ewm(span=61, adjust=False).mean()
+                    fig.add_trace(go.Scatter(
+                        x=df_selected.index,
+                        y=ema61,
+                        name='61日EMA',
+                        line=dict(color='orange', width=2)
+                    ))
+                    
+                    # 优化Y轴范围 - 修复错误
+                    try:
+                        low_min = float(df_selected['Low'].min())
+                        high_max = float(df_selected['High'].max())
+                        ema61_min = float(ema61.min())
+                        ema61_max = float(ema61.max())
+                        
+                        y_min = min(low_min, ema61_min) * 0.98
+                        y_max = max(high_max, ema61_max) * 1.02
+                    except:
+                        # 如果计算Y轴范围出错，使用默认范围
+                        y_min = float(df_selected['Low'].min()) * 0.98
+                        y_max = float(df_selected['High'].max()) * 1.02
+                    
+                    fig.update_layout(
+                        title=f"{selected_item['name']} 技术分析",
+                        xaxis_title='日期',
+                        yaxis_title='价格',
+                        xaxis_rangeslider_visible=False,
+                        yaxis=dict(range=[y_min, y_max])
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # 显示最新数据
+                    result = calculate_technicals_simple(df_selected)
+                    if result is not None:
+                        cols = st.columns(4)
+                        cols[0].metric("最新价", f"{result['Close']:.4f}")
+                        cols[1].metric("61日EMA", f"{result['ema61']:.4f}")
+                        cols[2].metric("趋势状态", result['trend_status'])
+                        cols[3].metric("距止盈跌幅", f"{(result['exit_distance_pct'] * 100):.2f}%")
+                except Exception as e:
+                    st.error(f"绘制图表时出错: {e}")
+                    import traceback
+                    st.error(traceback.format_exc())
     else:
         st.warning("未能获取任何数据，请检查网络连接和代码配置")
 
