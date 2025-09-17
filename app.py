@@ -259,6 +259,18 @@ def main():
         # 选择要显示的列
         display_columns = ['symbol', 'name', 'category', 'Close', 'ema61', 
                           'trend_status', 'dynamic_exit', 'exit_distance_pct', 'action']
+
+        # 创建列名映射字典（添加这行代码）
+        column_name_mapping = {
+            'ema61': '生命线',  # 例如：'趋势生命线' 或 '多空分界线'
+            # 您可以在这里添加其他需要重命名的列
+        }
+
+        # 格式化显示
+        display_df = df_dashboard[available_columns].copy()
+
+        # 重命名列（添加这行代码）
+        display_df = display_df.rename(columns=column_name_mapping)
         
         # 确保所有列都存在
         available_columns = [col for col in display_columns if col in df_dashboard.columns]
@@ -345,7 +357,7 @@ def main():
                     if result is not None:
                         cols = st.columns(4)
                         cols[0].metric("最新价", f"{result['Close']:.4f}")
-                        cols[1].metric("61日EMA", f"{result['ema61']:.4f}")
+                        cols[1].metric("生命线", f"{result['ema61']:.4f}")
                         cols[2].metric("趋势状态", result['trend_status'])
                         cols[3].metric("距止盈跌幅", f"{(result['exit_distance_pct'] * 100):.2f}%")
                 except Exception as e:
