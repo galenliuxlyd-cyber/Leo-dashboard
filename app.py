@@ -260,26 +260,17 @@ def main():
         display_columns = ['symbol', 'name', 'category', 'Close', 'ema61', 
                           'trend_status', 'dynamic_exit', 'exit_distance_pct', 'action']
 
-        # 创建列名映射字典（添加这行代码）
-        column_name_mapping = {
-            'ema61': '生命线',  # 例如：'趋势生命线' 或 '多空分界线'
-            # 您可以在这里添加其他需要重命名的列
-        }
-
-        # 格式化显示
-        display_df = df_dashboard[available_columns].copy()
-
-        # 重命名列（添加这行代码）
-        display_df = display_df.rename(columns=column_name_mapping)
-        
         # 确保所有列都存在
         available_columns = [col for col in display_columns if col in df_dashboard.columns]
         
         # 格式化显示
         display_df = df_dashboard[available_columns].copy()
         
+        # 只重命名ema61列为"生命线"，其他列保持不变
+        display_df = display_df.rename(columns={'ema61': '生命线'})
+        
         # 格式化数字
-        numeric_cols = ['Close', 'ema61', 'dynamic_exit']
+        numeric_cols = ['Close', '生命线', 'dynamic_exit']
         for col in numeric_cols:
             if col in display_df.columns:
                 display_df[col] = display_df[col].apply(lambda x: f"{x:.4f}" if not pd.isna(x) else "N/A")
