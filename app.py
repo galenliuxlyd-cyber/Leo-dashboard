@@ -37,6 +37,7 @@ PORTFOLIO = [
 # 手动调整的除权除息信息（可以预先设置已知的除权除息）
 DIVIDEND_ADJUSTMENTS = {
     "002004": {"date": "2025-09-16", "adjustment_factor": -0.2, "confirmed": True},
+}
 
 # 检测可能的除权除息事件
 def detect_dividend_events(symbol, name, df):
