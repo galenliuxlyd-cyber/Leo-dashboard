@@ -500,7 +500,7 @@ def main():
                     # 显示最新数据 - 直接从已计算的结果中获取
                     cols = st.columns(4)
                     cols[0].metric("最新价", f"{selected_item['Close']:.4f}")
-                    cols[1].metric("趋势生命线", f"{selected_item['ema61']:.4f}")
+                    cols[1].metric("生命线", f"{selected_item['ema61']:.4f}")
                     cols[2].metric("趋势状态", selected_item['trend_status'])
                     cols[3].metric("距止盈跌幅", f"{(selected_item['exit_distance_pct'] * 100):.2f}%")
                     
@@ -508,7 +508,7 @@ def main():
                     with st.expander("调试信息"):
                         st.write(f"数据点数: {len(df_selected)}")
                         st.write(f"最新5个收盘价: {df_selected['Close'].tail(5).tolist()}")
-                        st.write(f"EMA61计算值: {selected_item['ema61']:.4f}")
+                        st.write(f"生命线计算值: {selected_item['ema61']:.4f}")
                         if symbol in DIVIDEND_ADJUSTMENTS:
                             st.write(f"已应用除权除息调整: {DIVIDEND_ADJUSTMENTS[symbol]}")
                 except Exception as e:
