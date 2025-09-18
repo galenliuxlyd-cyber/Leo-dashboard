@@ -32,6 +32,9 @@ PORTFOLIO = [
     {"category": "A股机器人个股", "symbol": "000559", "name": "万向钱潮", "source": "akshare"},
     {"category": "A股算力个股", "symbol": "600654", "name": "中安科", "source": "akshare"},
     {"category": "A股医美个股", "symbol": "002004", "name": "华邦健康", "source": "akshare"},
+    {"category": "内盘期货商品", "symbol": "RB888", "name": "螺纹钢主连", "source": "akshare"},
+    {"category": "内盘期货商品"", "symbol": "JM888", "name": "焦煤主连", "source": "akshare"},
+    {"category": "内盘期货商品"", "symbol": "TA888", "name": "PTA主连", "source": "akshare"},
 ]
 
 # 获取数据函数 - 使用yfinance
