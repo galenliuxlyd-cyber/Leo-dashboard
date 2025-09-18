@@ -9,7 +9,7 @@ import time
 
 # 设置页面
 st.set_page_config(page_title="Leo DashBoard", layout="wide")
-st.title("🔥 LeoTV is DB")
+st.title("🔥 Leo TV is DB")
 
 # 标的配置
 PORTFOLIO = [
@@ -288,7 +288,7 @@ def generate_action(result, category):
         return '⏳ 数据不足'
     
     if '违规' in category:
-        return '🚨 违宪'
+        return '🚨 违反宪法'
     
     if result.get('trend_status', '') == '🔴 空头':
         return '🔴 破位清仓'
@@ -393,11 +393,11 @@ def main():
         df_dashboard = pd.DataFrame(all_data)
         
         # 显示监控仪表板
-        st.subheader("持仓监控仪表板")
+        st.subheader("监控仪表板")
         
         # 创建列名映射字典
         column_name_mapping = {
-            'ema61': '趋势生命线',
+            'ema61': '生命线',
         }
         
         # 选择要显示的列
@@ -414,7 +414,7 @@ def main():
         display_df = display_df.rename(columns=column_name_mapping)
         
         # 格式化数字
-        numeric_cols = ['Close', '趋势生命线', 'dynamic_exit']
+        numeric_cols = ['Close', '生命线', 'dynamic_exit']
         for col in numeric_cols:
             if col in display_df.columns:
                 display_df[col] = display_df[col].apply(lambda x: f"{x:.4f}" if not pd.isna(x) else "N/A")
@@ -504,7 +504,7 @@ def main():
                     if result is not None:
                         cols = st.columns(4)
                         cols[0].metric("最新价", f"{result['Close']:.4f}")
-                        cols[1].metric("趋势生命线", f"{result['ema61']:.4f}")
+                        cols[1].metric("生命线", f"{result['ema61']:.4f}")
                         cols[2].metric("趋势状态", result['trend_status'])
                         cols[3].metric("距止盈跌幅", f"{(result['exit_distance_pct'] * 100):.2f}%")
                 except Exception as e:
