@@ -274,6 +274,9 @@ def calculate_technicals_simple(df, symbol):
         # 计算距离止盈跌幅
         result['exit_distance_pct'] = (result['Close'] - result['dynamic_exit']) / result['Close']
         
+        # 存储调整后的数据用于后续分析
+        result['adjusted_data'] = df
+        
         return result
         
     except Exception as e:
@@ -437,22 +440,17 @@ def main():
         
         # 选择标的显示详细图表
         st.subheader("个股技术分析")
-        options = [f"{item['symbol']} - {item['name']}" for item in PORTFOLIO]
+        options = [f"{item['symbol']} - {item['name']}" for item in all_data]
         selected_symbol = st.selectbox("选择标的", options)
         symbol = selected_symbol.split(' - ')[0]
-        selected_item = next((item for item in PORTFOLIO if item['symbol'] == symbol), None)
+        selected_item = next((item for item in all_data if item['symbol'] == symbol), None)
         
         if selected_item:
-            if selected_item['source'] == 'yfinance':
-                df_selected = get_data_yfinance(selected_item['symbol'], selected_item['name'])
-            else:
-                df_selected = get_data_akshare(selected_item['symbol'], selected_item['name'])
-                
+            # 使用已经计算好的调整后数据
+            df_selected = selected_item.get('adjusted_data')
+            
             if df_selected is not None and not df_selected.empty:
                 try:
-                    # 处理除权除息调整
-                    df_selected = adjust_for_dividends(df_selected, selected_item['symbol'])
-                    
                     # 创建图表
                     fig = go.Figure()
                     
@@ -499,14 +497,20 @@ def main():
                     
                     st.plotly_chart(fig, use_container_width=True)
                     
-                    # 显示最新数据
-                    result = calculate_technicals_simple(df_selected, selected_item['symbol'])
-                    if result is not None:
-                        cols = st.columns(4)
-                        cols[0].metric("最新价", f"{result['Close']:.4f}")
-                        cols[1].metric("生命线", f"{result['ema61']:.4f}")
-                        cols[2].metric("趋势状态", result['trend_status'])
-                        cols[3].metric("距止盈跌幅", f"{(result['exit_distance_pct'] * 100):.2f}%")
+                    # 显示最新数据 - 直接从已计算的结果中获取
+                    cols = st.columns(4)
+                    cols[0].metric("最新价", f"{selected_item['Close']:.4f}")
+                    cols[1].metric("趋势生命线", f"{selected_item['ema61']:.4f}")
+                    cols[2].metric("趋势状态", selected_item['trend_status'])
+                    cols[3].metric("距止盈跌幅", f"{(selected_item['exit_distance_pct'] * 100):.2f}%")
+                    
+                    # 显示调试信息
+                    with st.expander("调试信息"):
+                        st.write(f"数据点数: {len(df_selected)}")
+                        st.write(f"最新5个收盘价: {df_selected['Close'].tail(5).tolist()}")
+                        st.write(f"EMA61计算值: {selected_item['ema61']:.4f}")
+                        if symbol in DIVIDEND_ADJUSTMENTS:
+                            st.write(f"已应用除权除息调整: {DIVIDEND_ADJUSTMENTS[symbol]}")
                 except Exception as e:
                     st.error(f"绘制图表时出错: {e}")
                     import traceback
