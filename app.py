@@ -9,9 +9,9 @@ import time
 
 # 设置页面
 st.set_page_config(page_title="Leo DashBoard", layout="wide")
-st.title("🔥 LeoTV投资系统DB监控看板")
+st.title("🔥 LeoTV is DB")
 
-# 完整持仓配置 - 修正指数代码
+# 标的配置
 PORTFOLIO = [
     {"category": "美股大盘", "symbol": "^IXIC", "name": "纳斯达克指数", "source": "yfinance"},
     {"category": "A股大盘", "symbol": "000001", "name": "上证指数", "source": "akshare"},
@@ -33,6 +33,41 @@ PORTFOLIO = [
     {"category": "A股算力个股", "symbol": "600654", "name": "中安科", "source": "akshare"},
     {"category": "A股医美个股", "symbol": "002004", "name": "华邦健康", "source": "akshare"},
 ]
+
+# 手动调整的除权除息信息（可以预先设置已知的除权除息）
+DIVIDEND_ADJUSTMENTS = {
+    "002004": {"date": "2025-09-16", "adjustment_factor": -0.2, "confirmed": True},
+
+# 检测可能的除权除息事件
+def detect_dividend_events(symbol, name, df):
+    """检测可能的除权除息事件"""
+    events = []
+    
+    if df is None or len(df) < 2:
+        return events
+    
+    # 检查最近5个交易日内的价格异常变动
+    for i in range(1, min(6, len(df))):
+        prev_close = df['Close'].iloc[-i-1]
+        current_close = df['Close'].iloc[-i]
+        price_change = (current_close - prev_close) / prev_close
+        
+        # 如果价格变动超过阈值，可能是除权除息
+        if price_change < -0.08:  # 单日跌幅超过8%
+            event_date = df.index[-i].strftime('%Y-%m-%d')
+            adjustment_factor = current_close / prev_close
+            
+            events.append({
+                "symbol": symbol,
+                "name": name,
+                "date": event_date,
+                "price_change": price_change,
+                "adjustment_factor": adjustment_factor,
+                "prev_close": prev_close,
+                "current_close": current_close
+            })
+    
+    return events
 
 # 获取数据函数 - 使用yfinance
 def get_data_yfinance(symbol, name):
@@ -130,12 +165,35 @@ def get_data_akshare(symbol, name, max_retries=3):
     
     return None
 
+# 处理除权除息调整
+def adjust_for_dividends(df, symbol):
+    if symbol in DIVIDEND_ADJUSTMENTS and DIVIDEND_ADJUSTMENTS[symbol].get("confirmed", False):
+        adjustment = DIVIDEND_ADJUSTMENTS[symbol]
+        adjustment_date = pd.to_datetime(adjustment["date"])
+        adjustment_factor = adjustment["adjustment_factor"]
+        
+        # 找到调整日期之前的所有数据
+        pre_adjustment = df[df.index < adjustment_date]
+        
+        if not pre_adjustment.empty:
+            # 调整调整日期之前的所有价格数据
+            for col in ['Open', 'High', 'Low', 'Close']:
+                df.loc[df.index < adjustment_date, col] = df.loc[df.index < adjustment_date, col] * adjustment_factor
+            
+            # 调整成交量
+            df.loc[df.index < adjustment_date, 'Volume'] = df.loc[df.index < adjustment_date, 'Volume'] / adjustment_factor
+    
+    return df
+
 # 计算技术指标
-def calculate_technicals_simple(df):
+def calculate_technicals_simple(df, symbol):
     if df is None or df.empty or len(df) < 65:
         return None
     
     try:
+        # 处理除权除息调整
+        df = adjust_for_dividends(df, symbol)
+        
         # 创建结果字典
         result = {}
         
@@ -212,8 +270,56 @@ def generate_action(result, category):
 # 主程序
 def main():
     all_data = []
+    dividend_events = []
     
     # 显示进度条
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    # 首先收集所有可能的除权除息事件
+    for i, item in enumerate(PORTFOLIO):
+        status_text.text(f"正在分析 {item['name']} 的除权除息事件 ({i+1}/{len(PORTFOLIO)})")
+        progress_bar.progress((i+1)/len(PORTFOLIO))
+        
+        try:
+            # 获取数据
+            if item['source'] == 'yfinance':
+                df = get_data_yfinance(item['symbol'], item['name'])
+            else:
+                df = get_data_akshare(item['symbol'], item['name'])
+            
+            # 检测除权除息事件
+            if df is not None and not df.empty:
+                events = detect_dividend_events(item['symbol'], item['name'], df)
+                dividend_events.extend(events)
+        
+        except Exception as e:
+            st.error(f"分析 {item['name']} 时出错: {e}")
+        
+        # 添加短暂延迟
+        time.sleep(0.1)
+    
+    # 显示检测到的除权除息事件供用户确认
+    if dividend_events:
+        st.sidebar.subheader("📋 检测到的除权除息事件")
+        for event in dividend_events:
+            if event["symbol"] not in DIVIDEND_ADJUSTMENTS or not DIVIDEND_ADJUSTMENTS[event["symbol"]].get("confirmed", False):
+                st.sidebar.write(f"**{event['name']}({event['symbol']})**")
+                st.sidebar.write(f"日期: {event['date']}, 价格变动: {event['price_change']*100:.2f}%")
+                
+                if st.sidebar.button(f"确认 {event['name']} 的除权除息", key=f"confirm_{event['symbol']}_{event['date']}"):
+                    DIVIDEND_ADJUSTMENTS[event["symbol"]] = {
+                        "date": event["date"],
+                        "adjustment_factor": event["adjustment_factor"],
+                        "confirmed": True
+                    }
+                    st.sidebar.success(f"已确认 {event['name']} 的除权除息事件")
+    
+    # 清除进度条
+    progress_bar.empty()
+    status_text.empty()
+    
+    # 重新显示进度条进行数据处理
     progress_bar = st.progress(0)
     status_text = st.empty()
     
@@ -230,7 +336,7 @@ def main():
             
             # 计算技术指标
             if df is not None and not df.empty:
-                result = calculate_technicals_simple(df)
+                result = calculate_technicals_simple(df, item['symbol'])
                 if result is not None:
                     result['symbol'] = item['symbol']
                     result['name'] = item['name']
@@ -254,20 +360,25 @@ def main():
         df_dashboard = pd.DataFrame(all_data)
         
         # 显示监控仪表板
-        st.subheader("持仓监控仪表板")
+        st.subheader("监控仪表板")
+        
+        # 创建列名映射字典
+        column_name_mapping = {
+            'ema61': '生命线',
+        }
         
         # 选择要显示的列
         display_columns = ['symbol', 'name', 'category', 'Close', 'ema61', 
                           'trend_status', 'dynamic_exit', 'exit_distance_pct', 'action']
-
+        
         # 确保所有列都存在
         available_columns = [col for col in display_columns if col in df_dashboard.columns]
         
         # 格式化显示
         display_df = df_dashboard[available_columns].copy()
         
-        # 只重命名ema61列为"生命线"，其他列保持不变
-        display_df = display_df.rename(columns={'ema61': '生命线'})
+        # 重命名列
+        display_df = display_df.rename(columns=column_name_mapping)
         
         # 格式化数字
         numeric_cols = ['Close', '生命线', 'dynamic_exit']
@@ -281,6 +392,14 @@ def main():
         
         # 使用Streamlit的表格功能，而不是数据框，以获得更好的格式控制
         st.table(display_df)
+        
+        # 添加手动调整说明
+        st.info("""
+        **除权除息说明**：
+        - 系统会自动检测可能的除权除息事件并在侧边栏显示
+        - 您可以在侧边栏确认或忽略这些事件
+        - 已确认的除权除息事件会自动应用到价格计算中
+        """)
         
         # 选择标的显示详细图表
         st.subheader("个股技术分析")
@@ -297,6 +416,9 @@ def main():
                 
             if df_selected is not None and not df_selected.empty:
                 try:
+                    # 处理除权除息调整
+                    df_selected = adjust_for_dividends(df_selected, selected_item['symbol'])
+                    
                     # 创建图表
                     fig = go.Figure()
                     
@@ -344,7 +466,7 @@ def main():
                     st.plotly_chart(fig, use_container_width=True)
                     
                     # 显示最新数据
-                    result = calculate_technicals_simple(df_selected)
+                    result = calculate_technicals_simple(df_selected, selected_item['symbol'])
                     if result is not None:
                         cols = st.columns(4)
                         cols[0].metric("最新价", f"{result['Close']:.4f}")
