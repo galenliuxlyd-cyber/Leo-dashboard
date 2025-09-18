@@ -34,8 +34,7 @@ PORTFOLIO = [
     {"category": "A股医美个股", "symbol": "002004", "name": "华邦健康", "source": "akshare"},
 ]
 
-# 手动调整的除权除息信息（可以预先设置已知的除权除息）
-# 对于现金分红，我们需要使用不同的调整方式
+# 手动调整的除权除息信息
 DIVIDEND_ADJUSTMENTS = {
     "002004": {
         "date": "2025-09-16", 
@@ -396,7 +395,7 @@ def main():
         df_dashboard = pd.DataFrame(all_data)
         
         # 显示监控仪表板
-        st.subheader("监控仪表板")
+        st.subheader("持仓监控仪表板")
         
         # 创建列名映射字典
         column_name_mapping = {
@@ -507,7 +506,20 @@ def main():
                     # 显示调试信息
                     with st.expander("调试信息"):
                         st.write(f"数据点数: {len(df_selected)}")
-                        st.write(f"最新5个收盘价: {df_selected['Close'].tail(5).tolist()}")
+                        st.write(f"数据列名: {list(df_selected.columns)}")
+                        
+                        # 修复这里：确保我们处理的是Series而不是DataFrame
+                        close_data = df_selected['Close']
+                        if hasattr(close_data, 'tolist'):
+                            st.write(f"最新5个收盘价: {close_data.tail(5).tolist()}")
+                        else:
+                            # 如果是DataFrame，转换为Series再处理
+                            if isinstance(close_data, pd.DataFrame):
+                                close_series = close_data.iloc[:, 0] if len(close_data.columns) > 0 else pd.Series()
+                                st.write(f"最新5个收盘价: {close_series.tail(5).tolist()}")
+                            else:
+                                st.write(f"最新5个收盘价: {list(close_data.tail(5))}")
+                        
                         st.write(f"生命线计算值: {selected_item['ema61']:.4f}")
                         if symbol in DIVIDEND_ADJUSTMENTS:
                             st.write(f"已应用除权除息调整: {DIVIDEND_ADJUSTMENTS[symbol]}")
