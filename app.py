@@ -35,8 +35,14 @@ PORTFOLIO = [
 ]
 
 # 手动调整的除权除息信息（可以预先设置已知的除权除息）
+# 对于现金分红，我们需要使用不同的调整方式
 DIVIDEND_ADJUSTMENTS = {
-    "002004": {"date": "2025-09-16", "adjustment_factor": -0.2, "confirmed": True},
+    "002004": {
+        "date": "2025-09-16", 
+        "dividend_per_share": 0.2,  # 每股现金分红0.2元
+        "adjustment_type": "cash_dividend",  # 现金分红
+        "confirmed": True
+    },
 }
 
 # 检测可能的除权除息事件
@@ -47,26 +53,40 @@ def detect_dividend_events(symbol, name, df):
     if df is None or len(df) < 2:
         return events
     
-    # 检查最近5个交易日内的价格异常变动
-    for i in range(1, min(6, len(df))):
-        prev_close = df['Close'].iloc[-i-1]
-        current_close = df['Close'].iloc[-i]
-        price_change = (current_close - prev_close) / prev_close
-        
-        # 如果价格变动超过阈值，可能是除权除息
-        if price_change < -0.08:  # 单日跌幅超过8%
-            event_date = df.index[-i].strftime('%Y-%m-%d')
-            adjustment_factor = current_close / prev_close
+    try:
+        # 检查最近5个交易日内的价格异常变动
+        for i in range(1, min(6, len(df))):
+            # 确保索引有效
+            if -i-1 < -len(df) or -i < -len(df):
+                continue
+                
+            prev_close = df['Close'].iloc[-i-1]
+            current_close = df['Close'].iloc[-i]
             
-            events.append({
-                "symbol": symbol,
-                "name": name,
-                "date": event_date,
-                "price_change": price_change,
-                "adjustment_factor": adjustment_factor,
-                "prev_close": prev_close,
-                "current_close": current_close
-            })
+            # 确保是标量值，不是Series
+            if hasattr(prev_close, 'item'):
+                prev_close = prev_close.item()
+            if hasattr(current_close, 'item'):
+                current_close = current_close.item()
+                
+            price_change = (current_close - prev_close) / prev_close
+            
+            # 如果价格变动超过阈值，可能是除权除息
+            if price_change < -0.08:  # 单日跌幅超过8%
+                event_date = df.index[-i].strftime('%Y-%m-%d')
+                adjustment_factor = current_close / prev_close
+                
+                events.append({
+                    "symbol": symbol,
+                    "name": name,
+                    "date": event_date,
+                    "price_change": price_change,
+                    "adjustment_factor": adjustment_factor,
+                    "prev_close": prev_close,
+                    "current_close": current_close
+                })
+    except Exception as e:
+        st.error(f"检测 {name}({symbol}) 除权除息事件时出错: {e}")
     
     return events
 
@@ -171,18 +191,29 @@ def adjust_for_dividends(df, symbol):
     if symbol in DIVIDEND_ADJUSTMENTS and DIVIDEND_ADJUSTMENTS[symbol].get("confirmed", False):
         adjustment = DIVIDEND_ADJUSTMENTS[symbol]
         adjustment_date = pd.to_datetime(adjustment["date"])
-        adjustment_factor = adjustment["adjustment_factor"]
         
         # 找到调整日期之前的所有数据
         pre_adjustment = df[df.index < adjustment_date]
         
         if not pre_adjustment.empty:
-            # 调整调整日期之前的所有价格数据
-            for col in ['Open', 'High', 'Low', 'Close']:
-                df.loc[df.index < adjustment_date, col] = df.loc[df.index < adjustment_date, col] * adjustment_factor
+            # 现金分红调整
+            if adjustment.get("adjustment_type") == "cash_dividend" and "dividend_per_share" in adjustment:
+                dividend_per_share = adjustment["dividend_per_share"]
+                
+                # 对于现金分红，我们需要将分红前的价格减去分红金额
+                for col in ['Open', 'High', 'Low', 'Close']:
+                    df.loc[df.index < adjustment_date, col] = df.loc[df.index < adjustment_date, col] - dividend_per_share
             
-            # 调整成交量
-            df.loc[df.index < adjustment_date, 'Volume'] = df.loc[df.index < adjustment_date, 'Volume'] / adjustment_factor
+            # 比例调整（股票分割等）
+            elif adjustment.get("adjustment_type") == "factor" and "adjustment_factor" in adjustment:
+                adjustment_factor = adjustment["adjustment_factor"]
+                
+                # 对于比例调整，我们需要将分红前的价格乘以调整因子
+                for col in ['Open', 'High', 'Low', 'Close']:
+                    df.loc[df.index < adjustment_date, col] = df.loc[df.index < adjustment_date, col] * adjustment_factor
+                
+                # 调整成交量
+                df.loc[df.index < adjustment_date, 'Volume'] = df.loc[df.index < adjustment_date, 'Volume'] / adjustment_factor
     
     return df
 
@@ -312,6 +343,7 @@ def main():
                     DIVIDEND_ADJUSTMENTS[event["symbol"]] = {
                         "date": event["date"],
                         "adjustment_factor": event["adjustment_factor"],
+                        "adjustment_type": "factor",
                         "confirmed": True
                     }
                     st.sidebar.success(f"已确认 {event['name']} 的除权除息事件")
@@ -361,11 +393,11 @@ def main():
         df_dashboard = pd.DataFrame(all_data)
         
         # 显示监控仪表板
-        st.subheader("监控仪表板")
+        st.subheader("持仓监控仪表板")
         
         # 创建列名映射字典
         column_name_mapping = {
-            'ema61': '生命线',
+            'ema61': '趋势生命线',
         }
         
         # 选择要显示的列
@@ -382,7 +414,7 @@ def main():
         display_df = display_df.rename(columns=column_name_mapping)
         
         # 格式化数字
-        numeric_cols = ['Close', '生命线', 'dynamic_exit']
+        numeric_cols = ['Close', '趋势生命线', 'dynamic_exit']
         for col in numeric_cols:
             if col in display_df.columns:
                 display_df[col] = display_df[col].apply(lambda x: f"{x:.4f}" if not pd.isna(x) else "N/A")
@@ -400,6 +432,7 @@ def main():
         - 系统会自动检测可能的除权除息事件并在侧边栏显示
         - 您可以在侧边栏确认或忽略这些事件
         - 已确认的除权除息事件会自动应用到价格计算中
+        - 现金分红和股票分割使用不同的调整方式
         """)
         
         # 选择标的显示详细图表
@@ -471,7 +504,7 @@ def main():
                     if result is not None:
                         cols = st.columns(4)
                         cols[0].metric("最新价", f"{result['Close']:.4f}")
-                        cols[1].metric("生命线", f"{result['ema61']:.4f}")
+                        cols[1].metric("趋势生命线", f"{result['ema61']:.4f}")
                         cols[2].metric("趋势状态", result['trend_status'])
                         cols[3].metric("距止盈跌幅", f"{(result['exit_distance_pct'] * 100):.2f}%")
                 except Exception as e:
